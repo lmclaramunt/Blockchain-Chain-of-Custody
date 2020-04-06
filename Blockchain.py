@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
 Luis Claramunt
 Jacob Babik 
@@ -16,6 +16,7 @@ import random
 import datetime
 import argparse
 import collections
+from uuid import UUID
 #Convert from bytes to UUID uuid.UUID(bytes=b'\xf0\xe2\xfc\xe7\xf6\xdcL\xe3\x85\xb8\x12\x00u\x82\x1c\x0b')
 Block = collections.namedtuple('Block', ['prev_block_hash', 'time', 'caseID', 'itemID', 'state', 'data_length', 'data'])
 states = {'initial': b'INITIAL\0\0\0\0', 'checkin': b'CHECKEDIN\0\0', 'checkout': b'CHECKOUT\0', 'disposed': b'DISPOSED\0\0\0', 'destroyed':b'DESTROYED\0\0', 'released': b'RELEASED\0\0\0'}
@@ -25,10 +26,54 @@ def update_info():
     newFile = open(os.environ.get('BCHOC_FILE_PATH', 'BCHOC_FILE_PATH'), 'rb')
     #newFile = open('BCHOC_FILE_PATH', 'rb')
     readBytes = newFile.read(68)
+    readBlock = struct.unpack('20s d 16s I 11s I', readBytes)        
+    hashBlock = readBlock[0]
+    assert hashBlock == bytearray(20)
+    #Add time
+
+    case_id = uuid.UUID(bytes=readBlock[2])         #Convert case ID from bytes to string
+    assert case_id == uuid.UUID(int=0)
+
+    item_id = readBlock[3]
+    assert item_id == 0
+
+    state = readBlock[4]
+    assert state == states['initial']
+
+    length = readBlock[5]
+    assert length == 14
+
+    data = newFile.read(readBlock[5])
+    assert data == b'Initial block\x00'      
+    
+    block = Block(prev_block_hash=hashBlock,
+        time=readBlock[1],
+        caseID=case_id,
+        itemID=item_id,
+        state=state,
+        data_length=length, data=data.decode())
+    chain.append(block)
+
+    readBytes = newFile.read(68)
     while len(readBytes) == 68:
-        readBlock = struct.unpack('20s d 16s I 11s I', readBytes)
+        hashBlock = readBlock[0]
+        assert isinstance(hashBlock, bytes)
+        #Add time
+
         case_id = uuid.UUID(bytes=readBlock[2])         #Convert case ID from bytes to string
-        data = newFile.read(readBlock[5]).decode()
+        assert isinstance(case_id, uuid.UUID)
+
+        item_id = readBlock[3]
+        assert isinstance(item_id, int)
+
+        state = readBlock[4]
+        assert isinstance(state, bytes)
+
+        length = readBlock[5]
+        assert isinstance(length, int)
+
+        readBlock = struct.unpack('20s d 16s I 11s I', readBytes) 
+        data = newFile.read(readBlock[5]).decode()     
         block = Block(prev_block_hash=readBlock[0],
             time=readBlock[1],
             caseID=case_id,
@@ -44,13 +89,13 @@ def initialize(args)  :
     try:      
         update_info()
         print('Blockchain file found with INITIAL block.')
-    except FileNotFoundError:
+    except:
         newFile = open('BCHOC_FILE_PATH', 'wb')
-        initialBlock = Block(0, 
+        initialBlock = Block(bytearray(20), 
             0,
-            uuid.uuid4(),
-            random.getrandbits(32),
-            states['inital'],
+            uuid.UUID(int=0),
+            0,
+            states['initial'],
             14,
             b'Initial block\0')
         chain.append(initialBlock)
@@ -78,35 +123,39 @@ def hash(block):
     return hashlib.sha1(stringBlock.encode()).hexdigest()
 
 def addBlock(args):
-    update_info()                   #Get info in the file into the chain list
-    previousBlock = getBlockCaseId(args.case_ID)
+    try:
+        update_info()                   #Get info in the file into the chain list
+        previousBlock = getBlockCaseId(args.case_ID)
 
-    if previousBlock is False:
-        print('Block under such case ID does not exists')
-        print(chain)
-    else:
-        addFile = open(os.environ.get('BCHOC_FILE_PATH', 'BCHOC_FILE_PATH'), 'rb')
-        #addFile = open('BCHOC_FILE_PATH', 'wb')
-        print('Case: {}'.format(args.case_ID))
-        for id in args.item_ID:
-            newBlock = Block(prev_block_hash=hash(previousBlock),
-                time=0,
-                caseID=uuid.uuid4(),
-                itemID=id,
-                state=states['checkin'],
-                data_length=0,
-                data=b'')
-            chain.append(newBlock)
-            addFile.write(struct.pack('20s d 16s I 11s I', str(newBlock.prev_block_hash), 
-                newBlock.time, 
-                newBlock.caseID.bytes,
-                newBlock.itemID,
-                newBlock.state,
-                newBlock.data_length))
-            addFile.write(newBlock.data)
-            print('Added item: {}\n  Status: {}\n  Time of action: {}'.
-                format(id, newBlock.state.decode(), newBlock.time))
-        addFile.close()
+        if previousBlock is False:
+            print('Block under such case ID does not exists')
+            print(chain)
+        else:
+            addFile = open(os.environ.get('BCHOC_FILE_PATH', 'BCHOC_FILE_PATH'), 'rb')
+            #addFile = open('BCHOC_FILE_PATH', 'wb')
+            print('Case: {}'.format(args.case_ID))
+            for id in args.item_ID:
+                newBlock = Block(prev_block_hash=hash(previousBlock),
+                    time=0,
+                    caseID=uuid.uuid4(),
+                    itemID=id,
+                    state=states['checkin'],
+                    data_length=0,
+                    data=b'')
+                chain.append(newBlock)
+                addFile.write(struct.pack('20s d 16s I 11s I', str(newBlock.prev_block_hash), 
+                    newBlock.time, 
+                    newBlock.caseID.bytes,
+                    newBlock.itemID,
+                    newBlock.state,
+                    newBlock.data_length))
+                addFile.write(newBlock.data)
+                print('Added item: {}\n  Status: {}\n  Time of action: {}'.
+                    format(id, newBlock.state.decode(), newBlock.time))
+            addFile.close()
+    except:
+        sys.exit(404)
+
 
 def main():
     parser = argparse.ArgumentParser()
