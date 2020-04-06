@@ -15,168 +15,98 @@ import uuid
 import random
 import datetime
 import argparse
-
-global uid              #Remove later, used to verify case ID match
-
-class Block:
-    def __init__(self, state, parent = None, time = round(time.time(), 2), 
-    caseId = uuid.uuid4(), itemID = random.getrandbits(32),
-    dataLength = 14, bData = b'Initial block\0'):
-        self.parent_hash = parent
-        self.local_time = time
-        self.case_ID = caseId
-        self.evidence_item_ID = itemID
-        self.state = state
-        self.data_length = dataLength
-        self.data = bData
-        print("Case ID: ", self.case_ID.int)
-
-    def getHash(self):
-        return self.parent_hash
-
-    def getTime(self):
-        return self.local_time
-
-    def getCaseID(self):
-        return self.case_ID
-
-    def getItemID(self):
-        return self.evidence_item_ID
-    
-    def getState(self):
-        return self.state
-
-    def getDataLength(self):
-        return self.data_length
-    
-    def getData(self):
-        return self.data
-    
-    def setState(self, newState):
-        self.state = newState
-
+import collections
+#Convert from bytes to UUID uuid.UUID(bytes=b'\xf0\xe2\xfc\xe7\xf6\xdcL\xe3\x85\xb8\x12\x00u\x82\x1c\x0b')
+Block = collections.namedtuple('Block', ['prev_block_hash', 'time', 'caseID', 'itemID', 'state', 'data_length', 'data'])
+states = {'initial': b'INITIAL\0\0\0\0', 'checkin': b'CHECKEDIN\0\0', 'checkout': b'CHECKOUT\0', 'disposed': b'DISPOSED\0\0\0', 'destroyed':b'DESTROYED\0\0', 'released': b'RELEASED\0\0\0'}
 chain = []
-transaction = []
-#self.ids = []
 
-def update():
-    readFile = open(os.environ.get('BCHOC_FILE_PATH', 'BCHOC_FILE_PATH'), 'rb')
-    readBytes = readFile.read(68)
+def update_info():
+    newFile = open(os.environ.get('BCHOC_FILE_PATH', 'BCHOC_FILE_PATH'), 'rb')
+    #newFile = open('BCHOC_FILE_PATH', 'rb')
+    readBytes = newFile.read(68)
     while len(readBytes) == 68:
-        block = struct.unpack('20s d 16s I 11s I', readBytes)
-        print("Hash: ", block[0])
-        print("Time: ", block[1])
-        print("Case ID: ", block[2])
-        print("Item ID: ", block[3])
-        print("State: ", block[4])
-        print("Data Length: ", block[5])
-        print("Data: ", readFile.read(block[5]))
-        newBlock = Block(block[4], parent=block[0], time=block[1], caseId=block[2], itemID=block[3], 
-                dataLength=block[5], 
-                bData=readFile.read(block[5]))
-        chain.append(newBlock)
-        print(block[2])
-        readBytes = readFile.read(68) 
+        readBlock = struct.unpack('20s d 16s I 11s I', readBytes)
+        case_id = uuid.UUID(bytes=readBlock[2])         #Convert case ID from bytes to string
+        data = newFile.read(readBlock[5]).decode()
+        block = Block(prev_block_hash=readBlock[0],
+            time=readBlock[1],
+            caseID=case_id,
+            itemID=readBlock[3],
+            state=readBlock[4],
+            data_length=readBlock[5], data=data)
+        chain.append(block)
+        readBytes = newFile.read(68)  
+    newFile.close()
 
 
 def initialize(args)  :
-    try:
-        newFile = open(os.environ.get('BCHOC_FILE_PATH', 'BCHOC_FILE_PATH'), 'rb')
-        readBytes = newFile.read(68)
-        while len(readBytes) == 68:
-            block = struct.unpack('20s d 16s I 11s I', readBytes)
-            newBlock = Block(block[4], parent=block[0], time=block[1], caseId=block[2], itemID=block[3], 
-                dataLength=block[5], bData=readBytes.read(block[5]))
-            chain.append(newBlock)
-            readBytes = newFile.read(68)  
+    try:      
+        update_info()
         print('Blockchain file found with INITIAL block.')
-    except:
-        newFile = open(os.environ.get('BCHOC_FILE_PATH', 'BCHOC_FILE_PATH'), 'wb')
-        block = Block(state='INITIAL')
-        chain.append(block)
-        structBlock = struct.pack('20s d 16s I 11s I', str(block.getHash()), block.getTime(), 
-            str(block.getCaseID().int), block.getItemID(), block.getState(), block.getDataLength())
-        newFile.write(structBlock)
-        newFile.write(block.getData().encode())
+    except FileNotFoundError:
+        newFile = open('BCHOC_FILE_PATH', 'wb')
+        initialBlock = Block(0, 
+            0,
+            uuid.uuid4(),
+            random.getrandbits(32),
+            states['inital'],
+            14,
+            b'Initial block\0')
+        chain.append(initialBlock)
+        newFile.write(struct.pack('20s d 16s I 11s I', bytearray(20), 
+            initialBlock.time, 
+            initialBlock.caseID.bytes,
+            initialBlock.itemID,
+            initialBlock.state,
+            initialBlock.data_length))
+        newFile.write(initialBlock.data)
         newFile.close()
         print('Blockchain file not found. Created INITIAL block.')
 
-def getBlockCaseId(caseID):
-    print(len(chain))
-    for block in list(chain):
-        print("Block ", block)
-        if block.getCaseID() == caseID:
-            print(block.getCaseID())
+def getBlockCaseId(case_ID):
+    uuid_case_id = uuid.UUID(case_ID)        #Convert from string to UUID for comparison
+    for block in chain:
+        if block.caseID == uuid_case_id:
             return block
-    return False
-
-def checkInBlockItemId(itemId):
-    for block in list(chain):
-        if block.getItemID() == itemId:
-            block.setState('CHECKEDIN')
-            return block
-    return False
-    
-def addBlock(args):
-    update()
-    block = getBlockCaseId(args.case_ID)
-    
-
-    if block is False:
-        print('There is no Block under such Case ID')
-    # else:
-    #     blockFile = open(os.environ.get('BCHOC_FILE_PATH', 'BCHOC_FILE_PATH'), 'rb')
-    #     print("Case: {}".format(caseId))
-    #     newOnes = list(argv[0])
-    #     for itemId in newOnes:
-    #         newBlock = Block('CHECKEDIN', parent=block, itemID=itemId)
-    #         self.chain.append(newBlock)
-    #         structBlock = struct.pack('20s d 16s I 11s I', str(newBlock.getHash()), newBlock.getTime(), 
-    #             str(newBlock.getCaseID()), newBlock.getItemID(), newBlock.getState(), newBlock.getDataLength())
-    #         blockFile.write(structBlock)
-    #         blockFile.write(newBlock.getData().encode())
+    return False                        #Return false if block is never found 
         
-    #         print("Added item: {}\n  Status: 'CHECKEDIN'\n  Time of action: {}".
-    #             format(itemId, datetime.datetime.now()))
-    #     blockFile.close()
+def hash(block):
+    stringBlock = ""
+    for item in block:
+        stringBlock += str(item)
+    return hashlib.sha1(stringBlock.encode()).hexdigest()
 
-    # def checkOut(self, itemId):
-    #     found = False
-    #     for block in list(self.chain):
-    #         if block.getItemID() == itemId and block.getState() == 'CHECKEDIN':
-    #             block.setState('CHECKEDOUT')
-    #             print('Case: {}\nChecked out item: {}\n  Status: CHECKEDOUT\n  Time of action: {}'.
-    #                 format(block.getCaseID(), itemId, datetime.datetime.now()))
-    #             found = True
-    #         elif block.getItemID() == itemId and block.getState() == 'CHECKEDOUT':
-    #             print('Error: Cannot check out a checked out item. Must check it in first.\n$ echo $?\n1')      #Might remove the $ part later
-    #             found = True
+def addBlock(args):
+    update_info()                   #Get info in the file into the chain list
+    previousBlock = getBlockCaseId(args.case_ID)
 
-    #     if found is False:
-    #         print('There is no Block under such Item ID')
-    
-
-    # #Adjust to take care of different states DISPOSED, DESTROYED, RELEASED...
-    # def checkIn(self, itemId):
-    #     found = False
-    #     for block in list(self.chain):
-    #         if block.getItemID() == itemId:
-    #             block.setState('CHECKEDIN')
-    #             print('Case: {}\nChecked in item: {}\n  Status: CHECKEDIN\n  Time of action: {}'.
-    #             format(block.getCaseID(), itemId, datetime.datetime.now()))
-    #             found = True
-
-    #     if found is False:
-    #         print('There is no Block under such Item ID')
-
-    # def log(self, reverse=False):
-    #     self.chain.sort(key=lambda x: x.evidence_item_ID, reverse=False)
-    #     for block in list(self.chain):
-    #         print('Item: {}\nAction: {}\nTime: {}\n'.
-    #         format(block.getItemID(), block.getState(), block.getTime()))
-
-def hello_world(args):
-    print("HELLO WE MADE IT!")
+    if previousBlock is False:
+        print('Block under such case ID does not exists')
+        print(chain)
+    else:
+        addFile = open(os.environ.get('BCHOC_FILE_PATH', 'BCHOC_FILE_PATH'), 'rb')
+        #addFile = open('BCHOC_FILE_PATH', 'wb')
+        print('Case: {}'.format(args.case_ID))
+        for id in args.item_ID:
+            newBlock = Block(prev_block_hash=hash(previousBlock),
+                time=0,
+                caseID=uuid.uuid4(),
+                itemID=id,
+                state=states['checkin'],
+                data_length=0,
+                data=b'')
+            chain.append(newBlock)
+            addFile.write(struct.pack('20s d 16s I 11s I', str(newBlock.prev_block_hash), 
+                newBlock.time, 
+                newBlock.caseID.bytes,
+                newBlock.itemID,
+                newBlock.state,
+                newBlock.data_length))
+            addFile.write(newBlock.data)
+            print('Added item: {}\n  Status: {}\n  Time of action: {}'.
+                format(id, newBlock.state.decode(), newBlock.time))
+        addFile.close()
 
 def main():
     parser = argparse.ArgumentParser()
@@ -208,21 +138,6 @@ def main():
     # log.add_argument('-i', dest='item_ID', type=int, nargs='*')  
     args = parser.parse_args()
     args.func(args)
-
-    # if len(sys.argv) > 1:
-    #     if sys.argv[1] == 'init':           #Initialize
-    #         blockChain = Blockchain()
-    #         blockChain.initialize()
-    #     elif sys.argv[1] == 'add':
-    #         blockChain = Blockchain()       #Initialize, part of the test, delete later
-    #         blockChain.initialize()
-    #         #blockChain.addBlock(uid, sys.argv[5:len(sys.argv)])        #Use the line below, uid is for testing 
-    #         blockChain.log()
-    #         #blockChain.addBlock(sys.argv[3], sys.argv[5:len(sys.argv)])
-    #     elif sys.argv[1] == 'checkout':
-    #         blockChain.checkOut(sys.argv[3])
-    #     elif sys.argv[1] == 'checkin':
-    #         blockChain.checkIn(sys.argv[3])
    
 if __name__ == "__main__":
     main()

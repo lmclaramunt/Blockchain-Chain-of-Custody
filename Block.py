@@ -13,6 +13,7 @@ import time
 import uuid
 import random
 import datetime
+import hashlib
 
 global uid              #Remove later, used to verify case ID match
 
