@@ -91,6 +91,7 @@ def initialize(args)  :
         print('Blockchain file found with INITIAL block.')
     except:
         newFile = open(os.environ.get('BCHOC_FILE_PATH', 'BCHOC_FILE_PATH'), 'wb')
+        #newFile = open('BCHOC_FILE_PATH', 'wb')
         initialBlock = Block(bytearray(20),
             0,
             uuid.UUID(int=0),
@@ -124,9 +125,12 @@ def hash(block):
 
 def addBlock(args):
     try:
-        update_info()                   #Get info in the file into the chain list
-        previousBlock = getBlockCaseId(args.case_ID)
+        update_info()           #Get info in the file into the chain list
+    except:
+        initialize(args)        #If there is no info, initialize the blockchain
 
+    try:
+        previousBlock = getBlockCaseId(args.case_ID)
         if previousBlock is False:
             print('Block under such case ID does not exists')
         else:
@@ -188,8 +192,4 @@ def main():
     args.func(args)
 
 if __name__ == "__main__":
-<<<<<<< HEAD
     main()
-=======
-    main()
->>>>>>> 14d6a4570025daa8a9b8c93a103095d6fd123f40
