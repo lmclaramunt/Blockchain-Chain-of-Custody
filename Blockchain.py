@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 '''
 Luis Claramunt
-Jacob Babik 
+Jacob Babik
 Ben Downes
 CSE 469 Group Project
 April 28, 2020
@@ -26,7 +26,7 @@ def update_info():
     newFile = open(os.environ.get('BCHOC_FILE_PATH', 'BCHOC_FILE_PATH'), 'rb')
     #newFile = open('BCHOC_FILE_PATH', 'rb')
     readBytes = newFile.read(68)
-    readBlock = struct.unpack('20s d 16s I 11s I', readBytes)        
+    readBlock = struct.unpack('20s d 16s I 11s I', readBytes)
     hashBlock = readBlock[0]
     assert hashBlock == bytearray(20)
     #Add time
@@ -44,8 +44,8 @@ def update_info():
     assert length == 14
 
     data = newFile.read(readBlock[5])
-    assert data == b'Initial block\x00'      
-    
+    assert data == b'Initial block\x00'
+
     block = Block(prev_block_hash=hashBlock,
         time=readBlock[1],
         caseID=case_id,
@@ -72,8 +72,8 @@ def update_info():
         length = readBlock[5]
         assert isinstance(length, int)
 
-        readBlock = struct.unpack('20s d 16s I 11s I', readBytes) 
-        data = newFile.read(readBlock[5]).decode()     
+        readBlock = struct.unpack('20s d 16s I 11s I', readBytes)
+        data = newFile.read(readBlock[5]).decode()
         block = Block(prev_block_hash=readBlock[0],
             time=readBlock[1],
             caseID=case_id,
@@ -81,17 +81,17 @@ def update_info():
             state=readBlock[4],
             data_length=readBlock[5], data=data)
         chain.append(block)
-        readBytes = newFile.read(68)  
+        readBytes = newFile.read(68)
     newFile.close()
 
 
 def initialize(args)  :
-    try:      
+    try:
         update_info()
         print('Blockchain file found with INITIAL block.')
     except:
-        newFile = open('BCHOC_FILE_PATH', 'wb')
-        initialBlock = Block(bytearray(20), 
+        newFile = open(os.environ.get('BCHOC_FILE_PATH', 'BCHOC_FILE_PATH'), 'wb')
+        initialBlock = Block(bytearray(20),
             0,
             uuid.UUID(int=0),
             0,
@@ -99,9 +99,9 @@ def initialize(args)  :
             14,
             b'Initial block\0')
         chain.append(initialBlock)
-        newFile.write(struct.pack('20s d 16s I 11s I', bytearray(20), 
-            initialBlock.time, 
-            initialBlock.caseID.bytes,
+        newFile.write(struct.pack('20s d 16s I 11s I', bytearray(20),
+            initialBlock.time,
+            bytearray(16),
             initialBlock.itemID,
             initialBlock.state,
             initialBlock.data_length))
@@ -114,8 +114,8 @@ def getBlockCaseId(case_ID):
     for block in chain:
         if block.caseID == uuid_case_id:
             return block
-    return False                        #Return false if block is never found 
-        
+    return False                        #Return false if block is never found
+
 def hash(block):
     stringBlock = ""
     for item in block:
@@ -143,8 +143,8 @@ def addBlock(args):
                     data_length=0,
                     data=b'')
                 chain.append(newBlock)
-                addFile.write(struct.pack('20s d 16s I 11s I', str(newBlock.prev_block_hash), 
-                    newBlock.time, 
+                addFile.write(struct.pack('20s d 16s I 11s I', str(newBlock.prev_block_hash),
+                    newBlock.time,
                     newBlock.caseID.bytes,
                     newBlock.itemID,
                     newBlock.state,
@@ -184,10 +184,9 @@ def main():
     # log.add_argument('-r', required=False)
     # log.add_argument('-n', dest='num', type=int, nargs='*')
     # log.add_argument('-c', dest='case_ID', type=int, nargs='*')
-    # log.add_argument('-i', dest='item_ID', type=int, nargs='*')  
+    # log.add_argument('-i', dest='item_ID', type=int, nargs='*')
     args = parser.parse_args()
     args.func(args)
-   
+
 if __name__ == "__main__":
     main()
-    
