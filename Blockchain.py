@@ -188,4 +188,8 @@ def main():
     args.func(args)
 
 if __name__ == "__main__":
+<<<<<<< HEAD
     main()
+=======
+    main()
+>>>>>>> 14d6a4570025daa8a9b8c93a103095d6fd123f40
