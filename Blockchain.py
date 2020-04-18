@@ -172,7 +172,7 @@ def addBlock(args):
         for id in args.item_ID:
             #pdb.set_trace()
             if int(id) in ids: sys.exit(1)     #Check for duplicate item_ID
-            ids.append(int(id))
+            ids.append(int(id))                #Keep track of IDS
             newBlock = Block(prev_block_hash=hash(parent),
                 time=datetime.datetime.utcnow().timestamp(),
                 caseID= (UUID(str(args.case_ID))),
@@ -245,7 +245,7 @@ def checkIn(args):
             #addFile = open('BCHOC_FILE_PATH', 'ab')
             time = datetime.datetime.utcnow().timestamp()
             addFile.write(struct.pack('20s d 16s I 11s I', block.prev_block_hash,
-                0,
+                time,
                 block.caseID.bytes,
                 block.itemID,
                 states['checkin'],
@@ -331,6 +331,37 @@ def remove_(args):
         print('5')
         sys.exit(404)
 
+def logs(args):
+    try:
+        update_info()
+        printOnlyOneCaseId = False
+        printOnlyOneItemId = False
+        reverse = False if args.reverse == None else True                  #Determine if print them in reverse order 
+        numEntries = len(chain) if args.num == None else args.num        #Determine if print all block or only a specific number
+        if numEntries > len(chain) or numEntries < 0: sys.exit(1) 
+        if args.case_ID != None:                                           #If the user only wants one case ID                   
+            printOnlyOneCaseId = True
+            specificCaseId = uuid.UUID(args.case_ID) 
+        else: printOnlyOneCaseId = False
+        if args.item_ID != None:                                            #If the user only wants one item ID 
+            printOnlyOneItemId = True
+            specificItemId = int(args.item_ID) 
+        else: printOnlyOneCaseId = False
+
+        chain.sort(key=lambda x: x.time, reverse=reverse)           #Sort it, reverse or bot
+        i = 0      
+        for block in chain:
+            if printOnlyOneCaseId and specificCaseId != block.caseID:   #If it does not have the specified caseID, skip the rest of the foor lop
+                continue
+            if printOnlyOneItemId and specificItemId != block.itemID:   #If it does not have the specified itemID, skip the rest of the foor lop
+                continue
+            if i < numEntries:                                          #Keep track of how many we have printed 
+                print('Item: {}\nAction: {}\nTime: {}\n'.   
+                format(block.itemID, block.state, dt.fromtimestamp(block.time).isoformat()+'Z'))
+            i += 1
+    except:
+        sys.exit(1)
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('./bchoc', nargs='?', type=str, help='Enter the command you like to execute')
@@ -360,11 +391,13 @@ def main():
     remove.add_argument('-o', dest="owner", type=str)
     remove.set_defaults(func=remove_)
 
-    # log =subParser.add_parser('log')
-    # log.add_argument('-r', required=False)
-    # log.add_argument('-n', dest='num', type=int, nargs='*')
-    # log.add_argument('-c', dest='case_ID', type=int, nargs='*')
-    # log.add_argument('-i', dest='item_ID', type=int, nargs='*')
+    log =subParser.add_parser('log')
+    log.add_argument('-r', dest='reverse', nargs="*", required=False)
+    log.add_argument('-n', dest='num', type=int, required=False,)
+    log.add_argument('-c', dest='case_ID', type=int, required=False)
+    log.add_argument('-i', dest='item_ID', type=int, required=False)
+    log.set_defaults(func=logs)
+    
     args = parser.parse_args()
     args.func(args)
 
