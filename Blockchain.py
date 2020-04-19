@@ -20,10 +20,12 @@ from datetime import datetime as dt
 import datetime
 from uuid import UUID
 import pdb
+import subprocess
 #Convert from bytes to UUID uuid.UUID(bytes=b'\xf0\xe2\xfc\xe7\xf6\xdcL\xe3\x85\xb8\x12\x00u\x82\x1c\x0b')
 Block = collections.namedtuple('Block', ['prev_block_hash', 'time', 'caseID', 'itemID', 'state', 'data_length', 'data'])
-states = {'initial': b'INITIAL\0\0\0\0', 'checkin': b'CHECKEDIN\0\0', 'checkout': b'CHECKOUT\0', 'DISPOSED': b'DISPOSED\0\0\0', 'DESTROYED':b'DESTROYED\0\0', 'RELEASED': b'RELEASED\0\0\0'}
+states = {'initial': b'INITIAL\0\0\0\0', 'checkin': b'CHECKEDIN\0\0', 'checkout': b'CHECKEDOUT\0', 'DISPOSED': b'DISPOSED\0\0\0', 'DESTROYED':b'DESTROYED\0\0', 'RELEASED': b'RELEASED\0\0\0'}
 chain = []
+ids = []
 parent = None       #The last block read
 
 def update_info():
@@ -41,6 +43,7 @@ def update_info():
 
     item_id = readBlock[3]
     assert item_id == 0
+    ids.append(item_id)         #Keep track of block IDs
 
     state = readBlock[4]
     assert state == states['initial']
@@ -77,14 +80,15 @@ def update_info():
         #print(case_id)
 
         item_id = readBlock[3]
+        ids.append(item_id)         #Keep track of block IDs
+
         #assert isinstance(item_id, int)
 
-        state = readBlock[4]
+        state = readBlock[4]                #Keep track of block ID since they have to be unique
         #assert isinstance(state, bytes)
 
         length = readBlock[5]
         #assert isinstance(length, int)
-
 
         data = newFile.read(readBlock[5]).decode()
         block = Block(prev_block_hash=readBlock[0],
@@ -167,6 +171,8 @@ def addBlock(args):
         print('Case: {}'.format(args.case_ID))
         for id in args.item_ID:
             #pdb.set_trace()
+            if int(id) in ids: sys.exit(1)     #Check for duplicate item_ID
+            ids.append(int(id))                #Keep track of IDS
             newBlock = Block(prev_block_hash=hash(parent),
                 time=datetime.datetime.utcnow().timestamp(),
                 caseID= (UUID(str(args.case_ID))),
@@ -175,7 +181,6 @@ def addBlock(args):
                 data_length=0,
                 data=b'')
             chain.append(newBlock)
-
 
             addFile.write(struct.pack('20s d 16s I 11s I', newBlock.prev_block_hash,
                 newBlock.time,
@@ -190,19 +195,22 @@ def addBlock(args):
         addFile.close()
         #print(chain)
     except:
-        sys.exit(0)
+        sys.exit(1)
 
 def checkOut(args):
     try:
         update_info()
         block = getBlockItemId(args.item_ID)
-
+        #print(block.state)
         if block is False:
             print('No block under such ID')
-            sys.exit(0)
+            sys.exit(1)
         elif block.state != states['checkin']:
             print('Error: Cannot check out a checked out item. Must check it in first.')
-            sys.exit(0)
+            sys.exit(404)
+        elif block.state is states['DISPOSED'] or block.state is states['RELEASED'] or block.state is states['DESTROYED']:
+            print('Error: Cannot check out a block that has already been removed!')
+            sys.exit(404)
         else:
             addFile = open(os.environ.get('BCHOC_FILE_PATH', 'BCHOC_FILE_PATH'), 'ab')
             #addFile = open('BCHOC_FILE_PATH', 'ab')
@@ -218,33 +226,39 @@ def checkOut(args):
             print('Case {}\nChecked in item: {}\n  Status: {}\n  Time of action: {}.'.
                 format(block.caseID, args.item_ID, 'CHECKEDOUT', dt.fromtimestamp(time).isoformat()))
     except:
-        sys.exit(0)
+        sys.exit(1)
 
 def checkIn(args):
-    try:
+    # try:
         update_info()
         block = getBlockItemId(args.item_ID)
         global parent
-
+        #print(block.state)
         if block is False:
             print('No block under such ID')
-            sys.exit(0)
+            sys.exit(1)
+        elif block.state == b'CHECKEDIN\x00\x00':
+            print('That block is already checked in')
+            sys.exit(404)
+        elif block.state == b'DISPOSED\x00\x00\x00' or block.state == b'RELEASED\x00\x00\x00' or block.state == b'DESTROYED\x00\x00':
+            print('Error: Cannot check in a block that has already been removed!')
+            sys.exit(404)
         else:
             addFile = open(os.environ.get('BCHOC_FILE_PATH', 'BCHOC_FILE_PATH'), 'ab')
             #addFile = open('BCHOC_FILE_PATH', 'ab')
             time = datetime.datetime.utcnow().timestamp()
             addFile.write(struct.pack('20s d 16s I 11s I', block.prev_block_hash,
-                0,
+                time,
                 block.caseID.bytes,
                 block.itemID,
                 states['checkin'],
                 block.data_length))
             addFile.write(bytes(block.data, 'utf-8'))
             addFile.close()
-            print('Case {}\nChecked in item: {}\n  Status: {}\n  Time of action: {}.'.
+            print('Case: {}\nChecked in item: {}\n  Status: {}\n  Time of action: {}.'.
                 format(block.caseID, args.item_ID, 'CHECKEDIN', dt.fromtimestamp(time).isoformat()))
-    except:
-        sys.exit(0)
+    # except:
+    #     sys.exit(1)
 
 def remove_(args):
     if args.reason == 'RELEASED':
@@ -254,7 +268,7 @@ def remove_(args):
     try:
         #pdb.set_trace()
         update_info()
-        print(chain)
+        #print(chain)
         block = getBlockItemId(args.item_ID)
         if block is False:
             print('No block under such ID')
@@ -264,6 +278,7 @@ def remove_(args):
             found = False
             total = 0  #total bytes read
             offset = 0
+            #filePath = os.environ['BCHOC_FILE_PATH']
             file = open(os.environ.get('BCHOC_FILE_PATH', 'BCHOC_FILE_PATH'), 'rb')
 
             while not found:
@@ -292,8 +307,9 @@ def remove_(args):
                 data=blockData)
 
             #Overwrite old block with modified block
-            fh = open(os.environ.get('BCHOC_FILE_PATH', 'BCHOC_FILE_PATH'), 'r+b')
-            fh.seek(offset)
+            #fh = open(filePath, 'r+b')\
+            fh = open(os.environ.get('BCHOC_FILE_PATH', 'BCHOC_FILE_PATH'), 'ab')
+            #fh.seek(total)
             fh.write(struct.pack('20s d 16s I 11s I', modifiedBlock.prev_block_hash,
                 modifiedBlock.time,
                 modifiedBlock.caseID,
@@ -307,11 +323,11 @@ def remove_(args):
 
             if args.reason == 'RELEASED':
                 print('Case: {}\nRemoved item: {}\n  Status: {}\n  Owner info: {}\n  Time of action: {}'.
-                    format(modifiedBlock.caseID, args.item_ID, args.reason, args.owner, dt.fromtimestamp(modifiedBlock.time).isoformat()))
+                    format(uuid.UUID(bytes=modifiedBlock.caseID), args.item_ID, args.reason, args.owner, dt.fromtimestamp(modifiedBlock.time).isoformat()))
 
             else:
                 print('Case: {}\nRemoved item: {}\n  Status: {}\n  Time of action: {}'.
-                    format(modifiedBlock.caseID, args.item_ID, args.reason, dt.fromtimestamp(modifiedBlock.time).isoformat()))
+                    format(uuid.UUID(bytes=modifiedBlock.caseID), args.item_ID, args.reason, dt.fromtimestamp(modifiedBlock.time).isoformat()))
 
         else:
             print('Block with that ID was not CHECKEDIN')
@@ -319,6 +335,78 @@ def remove_(args):
     except:
         print('5')
         sys.exit(404)
+
+def logs(args):
+    #try:
+        update_info()
+        #pdb.set_trace()
+        printOnlyOneCaseId = False
+        printOnlyOneItemId = False
+        reverse = False if args.reverse == None else True                  #Determine if print them in reverse order
+        numEntries = len(chain) if args.num == None else args.num        #Determine if print all block or only a specific number
+        if numEntries < 0: sys.exit(1)
+        if args.case_ID != None:                                           #If the user only wants one case ID
+            printOnlyOneCaseId = True
+            #specificCaseId = uuid.UUID(args.case_ID)
+            specificCaseId = UUID(args.case_ID)
+        else:
+            printOnlyOneCaseId = False
+
+        if args.item_ID != None:                                            #If the user only wants one item ID
+            printOnlyOneItemId = True
+            specificItemId = int(args.item_ID)
+        else:
+            printOnlyOneItemId = False
+
+        chain.sort(key=lambda x: x.time, reverse=reverse)           #Sort it, reverse or bot
+        i = 0
+        #pdb.set_trace()
+        if printOnlyOneCaseId and printOnlyOneItemId:
+            for block in chain:
+                if i < numEntries:
+                    ba = bytearray((block.caseID).bytes)
+                    ba.reverse()
+                    s = ''.join(format(x, '02x') for x in ba)
+                    s = UUID(s)                                      #Keep track of how many we have printed
+                    if specificCaseId == s and specificItemId == block.itemID:
+                        print('Case: {}\nItem: {}\nAction: {}\nTime: {}\n'.
+                        format(s, block.itemID, block.state.decode("utf-8").rstrip('\x00'), dt.fromtimestamp(block.time).isoformat()+'Z'))
+                i += 1
+        if printOnlyOneCaseId:
+            for block in chain:
+                if i < numEntries:
+                    ba = bytearray((block.caseID).bytes)
+                    ba.reverse()
+                    s = ''.join(format(x, '02x') for x in ba)
+                    s = UUID(s)                                      #Keep track of how many we have printed
+                    if specificCaseId == s:
+                        print('Case: {}\nItem: {}\nAction: {}\nTime: {}\n'.
+                        format(s, block.itemID, block.state.decode("utf-8").rstrip('\x00'), dt.fromtimestamp(block.time).isoformat()+'Z'))
+                i += 1
+        elif printOnlyOneItemId:
+            for block in chain:
+                if i < numEntries:
+                    ba = bytearray((block.caseID).bytes)
+                    ba.reverse()
+                    s = ''.join(format(x, '02x') for x in ba)
+                    s = UUID(s)                                      #Keep track of how many we have printed
+                    if specificItemId == block.itemID:
+                        print('Case: {}\nItem: {}\nAction: {}\nTime: {}\n'.
+                        format(s, block.itemID, block.state.decode("utf-8").rstrip('\x00'), dt.fromtimestamp(block.time).isoformat()+'Z'))
+                i += 1
+        else:
+            for block in chain:
+                if i < numEntries:
+                    ba = bytearray((block.caseID).bytes)
+                    ba.reverse()
+                    s = ''.join(format(x, '02x') for x in ba)
+                    s = UUID(s)                                      #Keep track of how many we have printed
+                    print('Case: {}\nItem: {}\nAction: {}\nTime: {}\n'.
+                    format(s, block.itemID, block.state.decode("utf-8").rstrip('\x00'), dt.fromtimestamp(block.time).isoformat()+'Z'))
+                i += 1
+    #except:
+        #sys.exit(1)
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -349,11 +437,13 @@ def main():
     remove.add_argument('-o', dest="owner", type=str)
     remove.set_defaults(func=remove_)
 
-    # log =subParser.add_parser('log')
-    # log.add_argument('-r', required=False)
-    # log.add_argument('-n', dest='num', type=int, nargs='*')
-    # log.add_argument('-c', dest='case_ID', type=int, nargs='*')
-    # log.add_argument('-i', dest='item_ID', type=int, nargs='*')
+    log = subParser.add_parser('log')
+    log.add_argument('--reverse', '-r', dest='reverse', nargs='*', required=False)
+    log.add_argument('-n', dest='num', type=int, required=False,)
+    log.add_argument('-c', dest='case_ID', type=str, required=False)
+    log.add_argument('-i', dest='item_ID', type=int, required=False)
+    log.set_defaults(func=logs)
+
     args = parser.parse_args()
     args.func(args)
 
