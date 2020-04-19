@@ -89,7 +89,7 @@ def update_info():
 
         length = readBlock[5]
         #assert isinstance(length, int)
-
+        # print('Data: ', newFile.read(readBlock[5]))
         data = newFile.read(readBlock[5]).decode()
         block = Block(prev_block_hash=readBlock[0],
             time=readBlock[1],
@@ -101,7 +101,6 @@ def update_info():
         parent = block
         readBytes = newFile.read(68)
     newFile.close()
-
 
 def initialize(args)  :
     try:
@@ -268,7 +267,6 @@ def remove_(args):
     try:
         #pdb.set_trace()
         update_info()
-        #print(chain)
         block = getBlockItemId(args.item_ID)
         if block is False:
             print('No block under such ID')
@@ -297,9 +295,9 @@ def remove_(args):
 
             file.close()
 
-            #Create new block based on user input   
-            length = block[5] if args.owner == None else len(args.owner) + 1      #Set the length of the content to be written 
-            data = blockData if args.owner == None else args.owner.encode()       #The owner's info could be written in this block
+            #Create new block based on user input  
+            length = block[5] if args.owner == None else len(args.owner)+1      #Set the length of the content to be written 
+            data = blockData if args.owner == None else (args.owner + "\x00").encode()      #The owner's info could be written in this block
             modifiedBlock = Block(prev_block_hash=block[0],
                 time=datetime.datetime.utcnow().timestamp(),
                 caseID=block[2],
@@ -310,6 +308,7 @@ def remove_(args):
 
             #Overwrite old block with modified block
             #fh = open(filePath, 'r+b')\
+            print(modifiedBlock.state)
             fh = open(os.environ.get('BCHOC_FILE_PATH', 'BCHOC_FILE_PATH'), 'ab')
             #fh.seek(total)
             fh.write(struct.pack('20s d 16s I 11s I', modifiedBlock.prev_block_hash,
