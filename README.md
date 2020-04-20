@@ -63,7 +63,7 @@ Checked out item: 987654321
   Status: CHECKEDOUT
   Time of action: 2019-01-22T03:22:04.220451Z
   ```
- ### Checkin
+ ### checkin
 Add new block to the blockchain with the given item-id (`-i`) and `CHECKEDIN` state. Checkin actions may only be performed on evidence items that have already been added to the blockchain<br>Example:
 ```Checkin Example
 $ bchoc checkin -i 987654321
