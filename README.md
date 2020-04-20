@@ -87,7 +87,7 @@ Action: CHECKEDOUT
 Time: 2019-01-22T03:22:04.220451Z
 ```
 ### remove
-No further actions can be performed on the block with the specific id (`-i`). The block must have a state of `CHECKEDIN`. You may specify the reason why you are removing the evidence/block (`-y`). Valid reasons are: `DISPOSED`, `DESTROYED`, and `RELEASED`. If you choose `RELEASED` you must also provide owner information (`-o`) which does not have any requirements.
+No further actions can be performed on the block with the specific item-id (`-i`). The block must have a state of `CHECKEDIN`. You may specify the reason why you are removing the evidence/block (`-y`). Valid reasons are: `DISPOSED`, `DESTROYED`, and `RELEASED`. If you choose `RELEASED` you must also provide owner information (`-o`) which does not have any requirements.
 ```remove Example
 $ bchoc remove -i 987654321 -y RELEASED -o "John Doe, 123 Cherry Ln, Pleasant, AZ 84848, 480-XXX-4321"
 Case: 65cc391d-6568-4dcc-a3f1-86a2f04140f3
