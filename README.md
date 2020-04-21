@@ -2,7 +2,7 @@
 Developers: 
   - Luis Claramunt (1212717114)
   - Jacob Babik 
-  - Ben Downes
+  - Benjamin Downes (1211387694)
 
 Chain of custody is the chronological documentation that records the sequence of custody, control, transfer, analysis, and disposition of physical or electronic evidence.
 
