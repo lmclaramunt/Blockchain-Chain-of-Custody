@@ -434,7 +434,52 @@ def logs(args):
     #except:
         #sys.exit(1)
 
+def verifyChain(args):
+    try:
+        global parent
+        error = False
+        total = 0
+        errorCaseId = None
 
+        newFile = open(os.environ.get('BCHOC_FILE_PATH', 'BCHOC_FILE_PATH'), 'rb')
+        readBytes = newFile.read(68)
+        readBlock = struct.unpack('20s d 16s I 11s I', readBytes)
+        if readBlock[0] != bytearray(20): error = True
+        case_id = uuid.UUID(bytes=readBlock[2])         #Convert case ID from bytes to string
+        if case_id != uuid.UUID(int=0): error = True
+        if readBlock[3] != 0: error = True
+        ids.append(readBlock[3])                     #Keep track of block IDs
+        if readBlock[4] != states['initial']: error = True
+        if readBlock[5] != 14: error = True
+        if newFile.read(readBlock[5]) != b'Initial block\x00': error = True
+        
+        if error: errorCaseId = case_id
+        else: parent = case_id
+        total += 1
+        readBytes = newFile.read(68)
+        
+        while len(readBytes) == 68:
+            readBlock = struct.unpack('20s d 16s I 11s I', readBytes)   #Unpack next block
+            if not isinstance(readBlock[0], bytes): error = True
+            if not isinstance(readBlock[1], float): error = True
+            if not isinstance(readBlock[2], bytes): error = True
+            if not isinstance(readBlock[3], int): error = True
+            if not isinstance(readBlock[4], bytes): error = True
+            if not isinstance(readBlock[5], int): error = True
+            if not isinstance(newFile.read(readBlock[5]), bytes): error = True
+            if not error: parent = uuid.UUID(readBlock[2])
+            else: errorCaseId = uuid.UUID(readBlock[2])
+
+            readBytes = newFile.read(68)
+            total += 1
+        newFile.close()
+
+        print('Transactions in blockchain: {}\nState of blockchain: ERROR\nBad block:{}'.
+            format(total, errorCaseId))
+    except:
+        print('No blockchain to check')
+        sys.exit(1)
+        
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('./bchoc', nargs='?', type=str, help='Enter the command you like to execute')
@@ -470,6 +515,9 @@ def main():
     log.add_argument('-c', dest='case_ID', type=str, required=False)
     log.add_argument('-i', dest='item_ID', type=int, required=False)
     log.set_defaults(func=logs)
+
+    verify = subParser.add_parser('verify')
+    verify.set_defaults(func=verifyChain)
 
     args = parser.parse_args()
     args.func(args)
